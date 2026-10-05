@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PatentGuard AI - Pharmaceutical Patent Intelligence & FTO Engine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    [x-cloak] { display: none !important; }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.7);
+    }
+    .badge-api { background-color: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); }
+    .badge-polymer { background-color: rgba(168, 85, 247, 0.15); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.35); }
+    .badge-diluent { background-color: rgba(34, 197, 94, 0.15); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.35); }
+    .badge-disintegrant { background-color: rgba(249, 115, 22, 0.15); color: #fdba74; border: 1px solid rgba(249, 115, 22, 0.35); }
+    .badge-lubricant { background-color: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.35); }
+    .badge-surfactant { background-color: rgba(6, 182, 212, 0.15); color: #67e8f9; border: 1px solid rgba(6, 182, 212, 0.35); }
+    .badge-binder { background-color: rgba(234, 179, 8, 0.15); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.35); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-indigo-500 selection:text-white" x-data="patentGuardApp()" x-init="init()">
+
+  <!-- Top Navbar -->
+  <header class="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand & Mode Switcher -->
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+            <i class="fa-solid fa-flask-vial text-white text-lg"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-indigo-300 bg-clip-text text-transparent">PatentGuard <span class="text-indigo-400 font-mono text-sm">Pharma AI</span></span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">v2.0 Pharma & Chemical</span>
+            </div>
+            <p class="text-[11px] text-slate-400">Principal Patent Analyst & Pharmaceutical Formulator</p>
+          </div>
+        </div>
+
+        <!-- Mode Toggle Pill -->
+        <div class="hidden md:flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs">
+          <button @click="moduleMode = 'pharma'" :class="moduleMode === 'pharma' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1 rounded-md transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-dna text-xs"></i>
+            <span>Farmasi & Kimia (IUPAC)</span>
+          </button>
+          <button @click="moduleMode = 'general'" :class="moduleMode === 'general' ? 'bg-slate-800 text-slate-200 font-semibold' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1 rounded-md transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-microchip text-xs"></i>
+            <span>Paten Umum / Rekayasa</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Right Header Actions -->
+      <div class="flex items-center space-x-3">
+        <!-- API Health Status -->
+        <div class="flex items-center space-x-2 text-xs px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800">
+          <span class="w-2 h-2 rounded-full" :class="health.gemini_api_configured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'"></span>
+          <span class="text-slate-400 text-[11px]" x-text="health.gemini_api_configured ? 'Gemini 3.8 Flash Online' : 'Heuristic Rule-Based Pharma Engine'"></span>
+        </div>
+
+        <!-- Pharmaceutical Benchmark Cases Dropdown -->
+        <div class="relative" x-data="{ open: false }">
+          <button @click="open = !open" type="button" class="text-xs bg-indigo-950/60 hover:bg-indigo-900/60 text-indigo-300 px-3 py-1.5 rounded-lg border border-indigo-700/50 flex items-center space-x-2 transition shadow-sm">
+            <i class="fa-solid fa-pills text-indigo-400"></i>
+            <span class="font-medium">Kasus Uji Farmasi</span>
+            <i class="fa-solid fa-chevron-down text-[10px]"></i>
+          </button>
+
+          <div x-show="open" @click.away="open = false" x-cloak class="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 z-50 text-xs space-y-1">
+            <div class="text-slate-400 font-semibold px-2 py-1 border-b border-slate-800 flex justify-between items-center">
+              <span>Pilih Kasus Benchmark:</span>
+              <span class="text-[10px] text-indigo-400">3 Skenario Nyata</span>
+            </div>
+
+            <template x-for="c in pharmaCases" :key="c.id">
+              <button @click="loadPharmaCase(c.id); open = false" class="w-full text-left p-2 rounded-lg hover:bg-slate-800/80 transition flex items-start space-x-2.5">
+                <span class="text-xs mt-0.5" :class="c.badge_color === 'rose' ? 'text-rose-400' : (c.badge_color === 'emerald' ? 'text-emerald-400' : 'text-amber-400')">
+                  <i class="fa-solid fa-circle-dot"></i>
+                </span>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between">
+                    <p class="font-semibold text-slate-200 text-xs" x-text="c.title.split(':')[1] || c.title"></p>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded font-bold" :class="c.badge_color === 'rose' ? 'bg-rose-500/20 text-rose-300' : (c.badge_color === 'emerald' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300')" x-text="c.badge"></span>
+                  </div>
+                  <p class="text-[11px] text-slate-400 mt-0.5" x-text="c.product_name"></p>
+                </div>
+              </button>
+            </template>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Top Workflow Navigation Tabs -->
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+      <div class="flex items-center space-x-1 sm:space-x-2">
+        <button @click="activeTab = 'upload'" :class="activeTab === 'upload' ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'" class="px-3 sm:px-4 py-2 rounded-xl text-xs flex items-center space-x-2 transition">
+          <span class="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center font-bold text-[10px]">1</span>
+          <span>Upload & Ingestion</span>
+        </button>
+
+        <button @click="activeTab = 'chemical'" :disabled="!pharmaReport" :class="activeTab === 'chemical' ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20' : (pharmaReport ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900' : 'text-slate-600 cursor-not-allowed')" class="px-3 sm:px-4 py-2 rounded-xl text-xs flex items-center space-x-2 transition">
+          <span class="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center font-bold text-[10px]">2</span>
+          <span>Dossier Kimia & Eksipien</span>
+          <span x-show="pharmaReport?.chemical_entities?.length" class="w-2 h-2 rounded-full bg-cyan-400"></span>
+        </button>
+
+        <button @click="activeTab = 'claim_chart'" :disabled="!pharmaReport" :class="activeTab === 'claim_chart' ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20' : (pharmaReport ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900' : 'text-slate-600 cursor-not-allowed')" class="px-3 sm:px-4 py-2 rounded-xl text-xs flex items-center space-x-2 transition">
+          <span class="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center font-bold text-[10px]">3</span>
+          <span>Claim Chart & Risiko FTO</span>
+          <span x-show="pharmaReport" class="px-1.5 py-0.2 text-[9px] rounded font-bold" :class="getRiskBadgeClass(pharmaReport?.overall_risk)" x-text="pharmaReport?.overall_risk"></span>
+        </button>
+
+        <button @click="activeTab = 'design_around'" :disabled="!pharmaReport" :class="activeTab === 'design_around' ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20' : (pharmaReport ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900' : 'text-slate-600 cursor-not-allowed')" class="px-3 sm:px-4 py-2 rounded-xl text-xs flex items-center space-x-2 transition">
+          <span class="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center font-bold text-[10px]">4</span>
+          <span>Design-Around & Ekspor</span>
+          <i class="fa-solid fa-file-pdf text-[11px] text-rose-400 ml-1"></i>
+        </button>
+      </div>
+
+      <!-- Quick Export Buttons if report ready -->
+      <div x-show="pharmaReport" x-cloak class="flex items-center space-x-2">
+        <button @click="downloadPDF()" :disabled="isDownloading" class="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition">
+          <i class="fa-solid fa-file-pdf"></i>
+          <span>Unduh PDF</span>
+        </button>
+        <button @click="downloadDOCX()" :disabled="isDownloading" class="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition">
+          <i class="fa-solid fa-file-word"></i>
+          <span>Unduh Word (.docx)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 1: UPLOAD & INGESTION -->
+    <!-- ========================================================================= -->
+    <div x-show="activeTab === 'upload'" class="space-y-6">
+
+      <!-- Hero Banner -->
+      <div class="bg-gradient-to-r from-indigo-950/70 via-slate-900 to-slate-900 border border-indigo-800/40 rounded-2xl p-5 relative overflow-hidden shadow-xl">
+        <div class="relative z-10 max-w-4xl space-y-1.5">
+          <div class="flex items-center space-x-2">
+            <span class="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold uppercase tracking-wider">Modul Farmasi & Kimia Terpadu</span>
+            <span class="text-xs text-slate-400">All-Elements Rule | Doctrine of Equivalents | IUPAC & FWR Test</span>
+          </div>
+          <h1 class="text-xl sm:text-2xl font-bold text-white">Analisis Pelanggaran Paten Farmasetik & Penelusuran Bebas Beroperasi (FTO)</h1>
+          <p class="text-slate-300 text-xs sm:text-sm leading-relaxed">
+            Identifikasi potensi pelanggaran paten terhadap formula produk internal Anda. Sistem secara otomatis memetakan tata nama kimia 
+            <strong>IUPAC / INN / Garam / Polimorf</strong>, mengevaluasi peran fungsional eksipien melalui uji <strong>Function-Way-Result (Graver Tank)</strong>, 
+            dan menyusun rekomendasi rekayasa formulasi bebas paten (<em>Design-Around</em>).
+          </p>
+        </div>
+      </div>
+
+      <!-- Two-Column Input: Patent & Formula Documents -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Column 1: Patent Document & Claims -->
+        <div class="glass-card rounded-2xl p-5 flex flex-col space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs">A</span>
+              <h2 class="font-semibold text-slate-100 text-sm">Dokumen Paten Pembanding (Klaim & Deskripsi)</h2>
+            </div>
+            
+            <!-- File Upload Button for Patent -->
+            <label class="cursor-pointer text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center space-x-1.5 transition">
+              <i class="fa-solid fa-file-arrow-up text-indigo-400"></i>
+              <span>Upload PDF/TXT</span>
+              <input type="file" class="hidden" accept=".pdf,.txt,.docx" @change="uploadPatentFile($event)">
+            </label>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Judul / Nomor Paten</label>
+            <input type="text" x-model="patentTitle" placeholder="Contoh: US654321 - Extended-Release Metformin Formulation" class="w-full bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <div class="flex-1 flex flex-col">
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-medium text-slate-400">Teks Klaim Paten Farmasi (Claims Section)</label>
+              <span class="text-[10px] text-slate-500">Format USPTO, PCT/WIPO, EPO, DJKI</span>
+            </div>
+            <textarea x-model="patentText" rows="12" placeholder="Paste klausul klaim paten di sini...
+Contoh:
+1. An extended-release pharmaceutical matrix tablet comprising:
+    500 mg to 1000 mg of 1,1-dimethylbiguanide hydrochloride;
+    20% to 40% by weight of hydroxypropyl methylcellulose; and
+    0.5% to 2.0% of a lubricant,
+    wherein the tablet is manufactured via wet granulation..." class="w-full flex-1 bg-slate-900/90 border border-slate-800 rounded-lg p-3 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 leading-relaxed"></textarea>
+          </div>
+        </div>
+
+        <!-- Column 2: Internal Formula Specification -->
+        <div class="glass-card rounded-2xl p-5 flex flex-col space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-xs">B</span>
+              <h2 class="font-semibold text-slate-100 text-sm">Spesifikasi Formula Produk Internal</h2>
+            </div>
+
+            <!-- File Upload Button for Formula -->
+            <label class="cursor-pointer text-xs bg-slate-800 hover:bg-slate-700 text-cyan-300 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center space-x-1.5 transition">
+              <i class="fa-solid fa-file-arrow-up text-cyan-400"></i>
+              <span>Upload Dokumen Formula</span>
+              <input type="file" class="hidden" accept=".pdf,.txt,.docx" @change="uploadFormulaFile($event)">
+            </label>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Nama Produk / Batch Formula</label>
+              <input type="text" x-model="productName" placeholder="Contoh: Glucosafe XR 500mg" class="w-full bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Bentuk Sediaan Farmasi</label>
+              <input type="text" x-model="dosageForm" placeholder="Contoh: Tablet Lepas Lambat (Hydrophilic Matrix)" class="w-full bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500">
+            </div>
+          </div>
+
+          <div class="flex-1 flex flex-col">
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-medium text-slate-400">Rincian Komposisi Bahan & Proses Manufaktur</label>
+              <span class="text-[10px] text-slate-500">Kadar zat aktif, % w/w eksipien, tahapan proses</span>
+            </div>
+            <textarea x-model="formulaText" rows="12" placeholder="Tuliskan spesifikasi formula produk internal:
+- Zat Aktif: Metformin HCl 500 mg (1,1-dimethylbiguanide hydrochloride)
+- HPMC K100M: 28% w/w (matriks lepas lambat)
+- Avicel PH 102: 20% w/w (pengisi/pengikat)
+- Magnesium Stearate: 1.0% w/w (pelincir)
+- Aerosil 200: 0.5% w/w (glidan)
+Proses: High-shear wet granulation dengan pengeringan fluid bed dryer." class="w-full flex-1 bg-slate-900/90 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 leading-relaxed"></textarea>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Action Button -->
+      <div class="flex flex-col items-center space-y-3 pt-2">
+        <button @click="runAnalysis()" :disabled="isLoading || !patentText.trim() || !formulaText.trim()" type="button" class="relative group px-10 py-4 rounded-xl font-bold text-white shadow-2xl transition disabled:opacity-50 disabled:cursor-not-allowed">
+          <div class="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 via-cyan-500 to-purple-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
+          <div class="relative px-8 py-3.5 bg-slate-950 rounded-xl flex items-center space-x-3">
+            <i class="fa-solid fa-microscope text-cyan-400 text-lg" :class="{ 'fa-spin': isLoading }"></i>
+            <span class="text-sm font-bold tracking-wide" x-text="isLoading ? 'Menganalisis Klaim Farmasi & IUPAC...' : 'Jalankan Analisis Pelanggaran Paten Farmasi (FTO Claim Chart)'"></span>
+          </div>
+        </button>
+
+        <p class="text-[11px] text-slate-500">Menerapkan All-Elements Rule, Graver Tank Function-Way-Result Test, & Festo Prosecution History</p>
+      </div>
+
+      <!-- Loading Tracker -->
+      <div x-show="isLoading" x-cloak class="max-w-2xl mx-auto glass-card rounded-2xl p-6 text-center space-y-4 shadow-2xl">
+        <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-indigo-500/20 text-indigo-400 mb-1 animate-pulse">
+          <i class="fa-solid fa-brain text-2xl"></i>
+        </div>
+        <h3 class="text-sm font-bold text-white">AI Principal Patent Analyst Sedang Memproses</h3>
+        <p class="text-xs text-slate-400 font-mono" x-text="loadingStepMessage"></p>
+        <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
+          <div class="bg-gradient-to-r from-indigo-500 via-cyan-400 to-purple-500 h-2 rounded-full transition-all duration-500" :style="'width: ' + progressPercent + '%'"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 2: CHEMICAL & FUNCTIONAL PARSING VIEW -->
+    <!-- ========================================================================= -->
+    <div x-show="activeTab === 'chemical'" x-cloak class="space-y-6">
+
+      <!-- Section Title -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+            <i class="fa-solid fa-flask text-cyan-400"></i>
+            <span>Dossier Zat Aktif & Tata Nama Kimia IUPAC</span>
+          </h2>
+          <p class="text-xs text-slate-400">Cross-referencing nama dagang, INN, nama IUPAC resmi, rumus molekul, dan bentuk garam/polimorf</p>
+        </div>
+        <span class="text-xs px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30" x-text="(pharmaReport?.chemical_entities?.length || 0) + ' Entitas Kimia Terverifikasi'"></span>
+      </div>
+
+      <!-- Chemical Entity Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <template x-for="chem in pharmaReport?.chemical_entities" :key="chem.inn_name">
+          <div class="glass-card rounded-2xl p-5 border-l-4 border-l-cyan-500 space-y-3 shadow-lg">
+            <div class="flex items-start justify-between">
+              <div>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-cyan-400">Active Pharmaceutical Ingredient (API)</span>
+                <h3 class="text-lg font-bold text-white mt-0.5" x-text="chem.inn_name"></h3>
+                <p class="text-xs text-slate-400" x-text="'Nama Dagang: ' + chem.trade_names.join(', ')"></p>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="chem.is_equivalent_entity ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'" x-text="chem.is_equivalent_entity ? 'Zat Identik / Ekuivalen' : 'Zat Berbeda'"></span>
+            </div>
+
+            <!-- IUPAC Name Highlight Box -->
+            <div class="bg-slate-900/90 rounded-xl p-3 border border-slate-800/80 space-y-1">
+              <span class="text-[10px] font-mono uppercase text-slate-500 font-bold">Nama Kimia IUPAC Standar:</span>
+              <p class="text-xs font-mono text-cyan-200 select-all" x-text="chem.iupac_name"></p>
+            </div>
+
+            <!-- Physicochemical Metadata Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+              <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                <span class="text-slate-500 block text-[9px] uppercase">Rumus Molekul:</span>
+                <span class="font-mono text-slate-200" x-text="chem.molecular_formula || '-'"></span>
+              </div>
+              <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                <span class="text-slate-500 block text-[9px] uppercase">Berat Molekul (MW):</span>
+                <span class="font-mono text-slate-200" x-text="chem.molecular_weight || '-'"></span>
+              </div>
+              <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                <span class="text-slate-500 block text-[9px] uppercase">Nomor CAS:</span>
+                <span class="font-mono text-slate-200" x-text="chem.cas_number || '-'"></span>
+              </div>
+            </div>
+
+            <div class="p-2.5 rounded-lg bg-indigo-950/30 border border-indigo-800/40 text-[11px] text-slate-300">
+              <span class="font-semibold text-indigo-300">Bentuk Garam & Polimorf: </span>
+              <span x-text="chem.chemical_form"></span>
+              <p class="text-[10px] text-slate-400 mt-1 italic" x-text="chem.equivalence_note"></p>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Excipient Function & Equivalence Section -->
+      <div class="space-y-4 pt-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+              <i class="fa-solid fa-shapes text-indigo-400"></i>
+              <span>Pemetaan Peran Fungsional Bahan Baku (Excipient Function Mapping)</span>
+            </h2>
+            <p class="text-xs text-slate-400">Analisis substitusi eksipien dan uji kesetaraan farmasetik (Function-Way-Result Test)</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border border-slate-800 rounded-xl overflow-hidden">
+            <thead class="bg-slate-900/90 text-slate-400 uppercase text-[10px] border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-4">Bahan Baku Formula</th>
+                <th class="py-3 px-4">Kategori Fungsional</th>
+                <th class="py-3 px-4">Mekanisme Fisikokimia ("Way")</th>
+                <th class="py-3 px-4">Klaim Paten Pembanding</th>
+                <th class="py-3 px-4 text-center">Status Kesetaraan</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/70 bg-slate-950/60">
+              <template x-for="exc in pharmaReport?.excipient_evaluations" :key="exc.ingredient_name">
+                <tr class="hover:bg-slate-900/40 transition">
+                  <td class="py-3.5 px-4 font-semibold text-slate-100">
+                    <span x-text="exc.ingredient_name"></span>
+                    <span x-show="exc.unit_dosage_amount" class="block text-[11px] font-mono text-cyan-400 font-normal" x-text="exc.unit_dosage_amount"></span>
+                  </td>
+                  <td class="py-3.5 px-4">
+                    <span class="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold" :class="getExcipientBadgeClass(exc.functional_category)" x-text="exc.functional_category.replace(/_/g, ' ')"></span>
+                  </td>
+                  <td class="py-3.5 px-4 text-slate-300 leading-relaxed max-w-xs">
+                    <p x-text="exc.role_description"></p>
+                    <template x-if="exc.fwr_test">
+                      <div class="mt-2 p-2 rounded bg-slate-900/90 border border-slate-800 text-[10px] space-y-1">
+                        <p class="text-amber-300 font-semibold"><i class="fa-solid fa-scale-balanced mr-1"></i>Uji Doktrin Ekuivalensi (FWR):</p>
+                        <p class="text-slate-400" x-text="exc.fwr_test.legal_doctrine_summary"></p>
+                      </div>
+                    </template>
+                  </td>
+                  <td class="py-3.5 px-4 text-slate-400">
+                    <span class="font-medium text-slate-200" x-text="exc.claimed_counterpart || 'Tidak diklaim langsung'"></span>
+                    <span class="block text-[10px] text-slate-500 mt-0.5" x-text="'Rentang Klaim: ' + (exc.claimed_range || '-')"></span>
+                  </td>
+                  <td class="py-3.5 px-4 text-center">
+                    <span class="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold" :class="getElementStatusBadge(exc.equivalence_status)" x-text="exc.equivalence_status"></span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 3: CLAIM CHART & RISK ANALYSIS -->
+    <!-- ========================================================================= -->
+    <div x-show="activeTab === 'claim_chart'" x-cloak class="space-y-6">
+
+      <!-- Executive Risk Summary Banner -->
+      <div class="rounded-2xl p-6 border shadow-2xl relative overflow-hidden" :class="getRiskBannerClass(pharmaReport?.overall_risk)">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="space-y-1.5 max-w-4xl">
+            <div class="flex items-center space-x-2">
+              <span class="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-md" :class="getRiskBadgeClass(pharmaReport?.overall_risk)" x-text="'Tingkat Risiko: ' + pharmaReport?.overall_risk"></span>
+              <span class="text-xs text-slate-300" x-text="'Produk: ' + pharmaReport?.product_name"></span>
+              <span class="text-xs text-slate-400" x-text="'| Bentuk: ' + (pharmaReport?.dosage_form || 'Tablet')"></span>
+            </div>
+            <h2 class="text-xl font-bold text-white" x-text="pharmaReport?.patent_title"></h2>
+            <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-slate-200 font-medium leading-relaxed">
+              <span class="font-bold text-indigo-300">Opini Kebebasan Beroperasi (FTO): </span>
+              <span x-text="pharmaReport?.fto_verdict"></span>
+            </div>
+            <p class="text-xs text-slate-300 pt-1" x-text="pharmaReport?.executive_summary"></p>
+          </div>
+
+          <!-- Numeric Risk Score Gauge -->
+          <div class="flex flex-col items-center justify-center p-4 bg-slate-950/80 border border-slate-800 rounded-2xl min-w-[140px] text-center self-start md:self-center shadow-lg">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Risk Score</span>
+            <span class="text-3xl font-extrabold mt-1" :class="pharmaReport?.risk_score_numeric >= 70 ? 'text-rose-400' : (pharmaReport?.risk_score_numeric >= 40 ? 'text-amber-400' : 'text-emerald-400')" x-text="pharmaReport?.risk_score_numeric + '%'"></span>
+            <span class="text-[10px] text-slate-500 mt-1" x-text="pharmaReport?.all_elements_rule_met ? 'All-Elements Rule Met' : 'Element(s) Missing'"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="glass-card rounded-xl p-4">
+          <p class="text-[11px] text-slate-400 uppercase font-medium">All-Elements Rule</p>
+          <p class="text-base font-bold mt-1" :class="pharmaReport?.all_elements_rule_met ? 'text-rose-400' : 'text-emerald-400'" x-text="pharmaReport?.all_elements_rule_met ? 'Terpenuhi (Literal)' : 'Lolos (Missing Element)'"></p>
+        </div>
+        <div class="glass-card rounded-xl p-4">
+          <p class="text-[11px] text-slate-400 uppercase font-medium">Doctrine of Equivalents</p>
+          <p class="text-base font-bold mt-1" :class="pharmaReport?.doctrine_of_equivalents_triggered ? 'text-amber-400' : 'text-slate-300'" x-text="pharmaReport?.doctrine_of_equivalents_triggered ? 'Terpicu (DoE Risk)' : 'Tidak Terpicu'"></p>
+        </div>
+        <div class="glass-card rounded-xl p-4">
+          <p class="text-[11px] text-slate-400 uppercase font-medium">Zat Aktif (IUPAC)</p>
+          <p class="text-base font-bold text-cyan-400 mt-1" x-text="pharmaReport?.chemical_entities?.length ? pharmaReport.chemical_entities[0].inn_name : '-'"></p>
+        </div>
+        <div class="glass-card rounded-xl p-4">
+          <p class="text-[11px] text-slate-400 uppercase font-medium">Klaim Dianalisis</p>
+          <p class="text-base font-bold text-white mt-1" x-text="(pharmaReport?.claim_results?.length || 0) + ' Klaim'"></p>
+        </div>
+      </div>
+
+      <!-- Claim Chart Table Section -->
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-bold text-white flex items-center space-x-2">
+            <i class="fa-solid fa-table-list text-indigo-400"></i>
+            <span>Matriks Perbandingan Klaim Farmasi (Pharmaceutical Claim Chart)</span>
+          </h3>
+          <span class="text-xs text-slate-400">Dikelompokkan berdasarkan 4 Pilar Farmasetika</span>
+        </div>
+
+        <div class="space-y-6">
+          <template x-for="claim in pharmaReport?.claim_results" :key="claim.claim_number">
+            <div class="glass-card rounded-2xl overflow-hidden shadow-xl">
+              
+              <!-- Header Klaim -->
+              <div class="px-5 py-4 bg-slate-900/90 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div class="flex items-center space-x-3">
+                  <span class="text-sm font-bold text-white" x-text="'Klaim ' + claim.claim_number"></span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="claim.claim_type === 'INDEPENDENT' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'" x-text="claim.claim_type"></span>
+                  <span x-show="claim.depends_on" class="text-xs text-slate-400" x-text="'(Bergantung pada Klaim ' + claim.depends_on + ')'"></span>
+                </div>
+                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full" :class="getRiskBadgeClass(claim.risk_level)" x-text="'Risiko Klaim: ' + claim.risk_level"></span>
+              </div>
+
+              <!-- Ringkasan Klaim -->
+              <div class="px-5 py-3 bg-slate-900/40 border-b border-slate-800/60 text-xs text-slate-300 italic" x-text="claim.summary"></div>
+
+              <!-- Matriks Elemen -->
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-900/80 text-slate-400 font-semibold border-b border-slate-800 uppercase text-[10px]">
+                    <tr>
+                      <th class="py-3 px-4 w-12 text-center">#</th>
+                      <th class="py-3 px-4 w-28">Pilar Farmasi</th>
+                      <th class="py-3 px-4 w-1/3">Limitasi Klaim Paten (Claim Limitation)</th>
+                      <th class="py-3 px-4 w-1/4">Kondisi Formula Produk</th>
+                      <th class="py-3 px-4 w-28 text-center">Status</th>
+                      <th class="py-3 px-4">Justifikasi Ilmiah Farmasetik & Doktrin Hukum</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-800/60">
+                    <template x-for="elem in claim.elements" :key="elem.element_index">
+                      <tr class="hover:bg-slate-900/30 transition">
+                        <td class="py-3 px-4 font-mono text-slate-500 text-center font-bold" x-text="elem.element_index"></td>
+                        <td class="py-3 px-4">
+                          <span class="px-2 py-0.5 rounded text-[9px] font-bold font-mono" :class="getCategoryPillClass(elem.category)" x-text="elem.category"></span>
+                        </td>
+                        <td class="py-3 px-4 font-mono text-slate-200 leading-relaxed text-xs" x-text="elem.claim_limitation"></td>
+                        <td class="py-3 px-4 text-slate-300 text-xs font-medium">
+                          <span x-text="elem.formula_feature || '—'" :class="!elem.formula_feature ? 'text-slate-500' : 'text-slate-100'"></span>
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                          <span class="inline-block px-2.5 py-1 rounded text-[10px] font-bold" :class="getElementStatusBadge(elem.status)" x-text="elem.status"></span>
+                        </td>
+                        <td class="py-3 px-4 text-slate-300 leading-relaxed space-y-1">
+                          <p class="text-xs" x-text="elem.scientific_justification"></p>
+                          <span class="inline-block text-[9px] text-slate-400 border border-slate-800 rounded px-1.5 py-0.5 bg-slate-900/60 font-mono" x-text="elem.legal_doctrine"></span>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+          </template>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 4: DESIGN-AROUND & FTO EXPORT -->
+    <!-- ========================================================================= -->
+    <div x-show="activeTab === 'design_around'" x-cloak class="space-y-6">
+
+      <!-- Actionable Design-Around Strategies -->
+      <div class="glass-card rounded-2xl p-6 border-amber-500/30 space-y-5 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center space-x-2 text-amber-400">
+            <i class="fa-solid fa-lightbulb text-lg"></i>
+            <h2 class="text-lg font-bold text-white">Rekomendasi Rekayasa Bebas Paten (Pharmaceutical Design-Around Engine)</h2>
+          </div>
+          <span class="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-bold">Solusi Formulasi Taktis</span>
+        </div>
+
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Berdasarkan evaluasi terhadap batas klaim paten dan uji kesetaraan fungsional (FWR), berikut adalah taktik reformulasi 
+          yang dirancang untuk melepaskan produk dari cakupan <em>All-Elements Rule</em> dan <em>Doctrine of Equivalents</em>:
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <template x-for="(da, idx) in pharmaReport?.design_around_recommendations" :key="idx">
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-3 shadow-lg">
+              <div class="flex items-start justify-between">
+                <div class="flex items-center space-x-2">
+                  <span class="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs" x-text="idx + 1"></span>
+                  <h3 class="font-bold text-slate-100 text-sm" x-text="da.title"></h3>
+                </div>
+                <span class="text-[9px] font-mono px-2 py-0.5 rounded font-bold bg-slate-800 text-amber-300 border border-slate-700" x-text="da.strategy_type"></span>
+              </div>
+
+              <p class="text-xs text-slate-300" x-text="da.description"></p>
+
+              <!-- Step by Step -->
+              <div class="space-y-1.5 text-xs bg-slate-950/70 p-3 rounded-lg border border-slate-800/80">
+                <span class="text-[10px] font-bold text-indigo-400 uppercase">Protokol Langkah Reformulasi:</span>
+                <ul class="list-disc list-inside space-y-1 text-slate-300 text-[11px]">
+                  <template x-for="(step, sIdx) in da.reformulation_steps" :key="sIdx">
+                    <li x-text="step"></li>
+                  </template>
+                </ul>
+              </div>
+
+              <div class="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
+                <span class="font-semibold text-slate-300">Dasar Ilmiah FTO: </span>
+                <span x-text="da.scientific_rationale"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Live Reformulation Sandbox / Simulator -->
+      <div class="glass-card rounded-2xl p-6 border-indigo-500/30 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2 text-indigo-400">
+            <i class="fa-solid fa-flask-vial text-lg"></i>
+            <h2 class="text-lg font-bold text-white">Simulator Reformulasi Interaktif (Formula Sandbox)</h2>
+          </div>
+          <span class="text-xs text-slate-400">Ubah formula secara langsung untuk menguji penurunan skor risiko</span>
+        </div>
+
+        <p class="text-xs text-slate-300">
+          Uji coba perubahan persentase eksipien, penggantian bahan matriks, atau metode manufaktur. Klik "Simulasi Ulang Risiko" 
+          untuk melihat apakah formula modifikasi berhasil keluar dari klaim paten.
+        </p>
+
+        <textarea x-model="simFormulaText" rows="6" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500 leading-relaxed"></textarea>
+
+        <div class="flex justify-between items-center pt-1">
+          <span class="text-xs text-slate-400">Paten yang diuji: <strong class="text-slate-200" x-text="patentTitle || 'Paten Pembanding'"></strong></span>
+          <button @click="runSimulation()" :disabled="isSimulating || !simFormulaText.trim()" type="button" class="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold flex items-center space-x-2 transition shadow-lg">
+            <i class="fa-solid fa-arrows-rotate" :class="{ 'fa-spin': isSimulating }"></i>
+            <span x-text="isSimulating ? 'Menghitung Ulang...' : 'Simulasi Ulang Risiko FTO'"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Export Dossier Card -->
+      <div class="glass-card rounded-2xl p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center space-x-2 text-white">
+          <i class="fa-solid fa-file-export text-indigo-400 text-lg"></i>
+          <h2 class="text-lg font-bold">Unduh Berkas Dossier FTO Resmi</h2>
+        </div>
+        <p class="text-xs text-slate-400">
+          Laporan Freedom-to-Operate (FTO) siap cetak dan siap audit untuk keperluan formulasi RnD, manajemen regulatori, dan konsultan HAKI.
+        </p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+          <!-- PDF Download -->
+          <button @click="downloadPDF()" :disabled="isDownloading" class="p-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-left transition flex items-start space-x-3 group">
+            <div class="w-10 h-10 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center font-bold text-lg group-hover:scale-110 transition">
+              <i class="fa-solid fa-file-pdf"></i>
+            </div>
+            <div>
+              <p class="font-bold text-slate-100 text-xs">Unduh Laporan PDF</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">Format ReportLab resmi dengan tabel dossier IUPAC & FWR.</p>
+            </div>
+          </button>
+
+          <!-- DOCX Download -->
+          <button @click="downloadDOCX()" :disabled="isDownloading" class="p-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-left transition flex items-start space-x-3 group">
+            <div class="w-10 h-10 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-lg group-hover:scale-110 transition">
+              <i class="fa-solid fa-file-word"></i>
+            </div>
+            <div>
+              <p class="font-bold text-slate-100 text-xs">Unduh Berkas Word (.docx)</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">Dapat diedit untuk laporan komite paten & internal RnD.</p>
+            </div>
+          </button>
+
+          <!-- JSON Export -->
+          <button @click="exportJSON()" class="p-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-left transition flex items-start space-x-3 group">
+            <div class="w-10 h-10 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-lg group-hover:scale-110 transition">
+              <i class="fa-solid fa-code"></i>
+            </div>
+            <div>
+              <p class="font-bold text-slate-100 text-xs">Export Data JSON</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">Integrasi sistem LIMS atau IP docketing database.</p>
+            </div>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script>
+    function patentGuardApp() {
+      return {
+        moduleMode: 'pharma',
+        activeTab: 'upload',
+        patentTitle: '',
+        patentText: '',
+        productName: '',
+        dosageForm: 'Tablet Lepas Lambat (Hydrophilic Matrix)',
+        formulaText: '',
+        simFormulaText: '',
+        pharmaReport: null,
+        pharmaCases: [],
+        isLoading: false,
+        isSimulating: false,
+        isDownloading: false,
+        errorMessage: '',
+        loadingStepMessage: '',
+        progressPercent: 0,
+        health: {
+          status: 'checking',
+          gemini_api_configured: false,
+          default_model: 'gemini-3.8-flash'
+        },
+
+        async init() {
+          try {
+            const hRes = await fetch('/api/health');
+            if (hRes.ok) this.health = await hRes.json();
+
+            const cRes = await fetch('/api/pharma/sample-cases');
+            if (cRes.ok) {
+              const data = await cRes.json();
+              this.pharmaCases = data.cases || [];
+            }
+          } catch (e) {
+            console.warn('Initialization error:', e);
+          }
+        },
+
+        loadPharmaCase(caseId) {
+          const c = this.pharmaCases.find(item => item.id === caseId);
+          if (c) {
+            this.patentTitle = c.patent_title;
+            this.patentText = c.patent_text;
+            this.productName = c.product_name;
+            this.dosageForm = c.dosage_form || 'Tablet Lepas Lambat';
+            this.formulaText = c.product_formula_text;
+            this.simFormulaText = c.product_formula_text;
+            this.pharmaReport = null;
+            this.activeTab = 'upload';
+          }
+        },
+
+        async uploadPatentFile(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+          const formData = new FormData();
+          formData.append('patent_file', file);
+          try {
+            const res = await fetch('/api/pharma/upload-docs', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.patent_text) {
+              this.patentText = data.patent_text;
+              this.patentTitle = file.name.replace(/\.[^/.]+$/, '');
+            }
+          } catch (e) {
+            alert('Gagal membaca file paten: ' + e.message);
+          }
+        },
+
+        async uploadFormulaFile(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+          const formData = new FormData();
+          formData.append('formula_file', file);
+          try {
+            const res = await fetch('/api/pharma/upload-docs', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.formula_text) {
+              this.formulaText = data.formula_text;
+              this.simFormulaText = data.formula_text;
+              this.productName = file.name.replace(/\.[^/.]+$/, '');
+            }
+          } catch (e) {
+            alert('Gagal membaca file formula: ' + e.message);
+          }
+        },
+
+        async runAnalysis() {
+          if (!this.patentText.trim() || !this.formulaText.trim()) return;
+          this.isLoading = true;
+          this.errorMessage = '';
+          this.progressPercent = 15;
+          this.loadingStepMessage = 'Langkah 1: Mengurai klaim paten dan formula spesifikasi...';
+
+          const timer = setInterval(() => {
+            if (this.progressPercent < 35) {
+              this.progressPercent = 35;
+              this.loadingStepMessage = 'Langkah 2: Menelusuri nama IUPAC zat aktif, garam, dan bentuk polimorf...';
+            } else if (this.progressPercent < 70) {
+              this.progressPercent = 70;
+              this.loadingStepMessage = 'Langkah 3: Pemetaan peran eksipien & uji kesetaraan Function-Way-Result...';
+            } else if (this.progressPercent < 90) {
+              this.progressPercent = 90;
+              this.loadingStepMessage = 'Langkah 4: Menghitung All-Elements Rule dan menyusun Claim Chart...';
+            }
+          }, 700);
+
+          try {
+            const payload = {
+              patent_title: this.patentTitle || 'Dokumen Paten Farmasi',
+              patent_text: this.patentText,
+              product_name: this.productName || 'Formula Internal',
+              product_formula_text: this.formulaText,
+              dosage_form: this.dosageForm,
+            };
+
+            const res = await fetch('/api/pharma/analyze', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.detail || 'Gagal menganalisis paten farmasi.');
+            }
+
+            this.progressPercent = 100;
+            this.pharmaReport = await res.json();
+            this.simFormulaText = this.formulaText;
+            this.activeTab = 'claim_chart';
+          } catch (e) {
+            alert('Kesalahan Analisis: ' + e.message);
+          } finally {
+            clearInterval(timer);
+            this.isLoading = false;
+          }
+        },
+
+        async runSimulation() {
+          if (!this.simFormulaText.trim()) return;
+          this.isSimulating = true;
+          try {
+            const payload = {
+              patent_text: this.patentText,
+              product_name: this.productName,
+              modified_formula_text: this.simFormulaText,
+            };
+            const res = await fetch('/api/pharma/reformulate-sim', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+              this.pharmaReport = await res.json();
+              this.activeTab = 'claim_chart';
+            }
+          } catch (e) {
+            alert('Gagal mensimulasikan reformulasi: ' + e.message);
+          } finally {
+            this.isSimulating = false;
+          }
+        },
+
+        async downloadPDF() {
+          if (!this.pharmaReport) return;
+          this.isDownloading = true;
+          try {
+            const res = await fetch('/api/pharma/export-pdf', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.pharmaReport)
+            });
+            if (res.ok) {
+              const blob = await res.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `FTO_Report_${this.pharmaReport.product_name.replace(/\\s+/g, '_')}.pdf`;
+              a.click();
+              window.URL.revokeObjectURL(url);
+            }
+          } catch (e) {
+            alert('Gagal mengunduh PDF: ' + e.message);
+          } finally {
+            this.isDownloading = false;
+          }
+        },
+
+        async downloadDOCX() {
+          if (!this.pharmaReport) return;
+          this.isDownloading = true;
+          try {
+            const res = await fetch('/api/pharma/export-docx', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.pharmaReport)
+            });
+            if (res.ok) {
+              const blob = await res.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `FTO_Report_${this.pharmaReport.product_name.replace(/\\s+/g, '_')}.docx`;
+              a.click();
+              window.URL.revokeObjectURL(url);
+            }
+          } catch (e) {
+            alert('Gagal mengunduh Word: ' + e.message);
+          } finally {
+            this.isDownloading = false;
+          }
+        },
+
+        exportJSON() {
+          if (!this.pharmaReport) return;
+          const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(this.pharmaReport, null, 2));
+          const dlAnchor = document.createElement('a');
+          dlAnchor.setAttribute('href', dataStr);
+          dlAnchor.setAttribute('download', `FTO_Report_${Date.now()}.json`);
+          dlAnchor.click();
+        },
+
+        getRiskBannerClass(risk) {
+          if (risk === 'HIGH') return 'bg-gradient-to-r from-rose-950/80 via-slate-900 to-slate-950 border-rose-500/40';
+          if (risk === 'MEDIUM') return 'bg-gradient-to-r from-amber-950/80 via-slate-900 to-slate-950 border-amber-500/40';
+          return 'bg-gradient-to-r from-emerald-950/80 via-slate-900 to-slate-950 border-emerald-500/40';
+        },
+
+        getRiskBadgeClass(risk) {
+          if (risk === 'HIGH') return 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
+          if (risk === 'MEDIUM') return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+          return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+        },
+
+        getElementStatusBadge(status) {
+          if (status === 'LITERAL_MATCH') return 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
+          if (status === 'EQUIVALENT_MATCH') return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+          if (status === 'MISSING_ELEMENT') return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+          if (status === 'OUT_OF_RANGE') return 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30';
+          return 'bg-slate-800 text-slate-300';
+        },
+
+        getCategoryPillClass(cat) {
+          if (cat === 'ACTIVE_INGREDIENT') return 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
+          if (cat === 'CONCENTRATION_RANGE') return 'bg-purple-500/20 text-purple-300 border border-purple-500/30';
+          if (cat === 'MANUFACTURING_PROCESS') return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+          return 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30';
+        },
+
+        getExcipientBadgeClass(cat) {
+          if (cat.includes('RELEASE')) return 'badge-polymer';
+          if (cat.includes('DILUENT')) return 'badge-diluent';
+          if (cat.includes('DISINTEGRANT')) return 'badge-disintegrant';
+          if (cat.includes('LUBRICANT')) return 'badge-lubricant';
+          if (cat.includes('SURFACTANT')) return 'badge-surfactant';
+          if (cat.includes('BINDER')) return 'badge-binder';
+          return 'badge-api';
+        }
+      };
+    }
+  </script>
+</body>
+</html>
